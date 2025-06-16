@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "AgentA": {
+      "commandName": "Project",
+      "commandLineArgs": "\"C:\\csharp\\Projektas CSHARP\\AgentA\"\r\n"
+    }
+  }
+}
