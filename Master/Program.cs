@@ -4,6 +4,7 @@ using System.IO;
 using System.IO.Pipes;
 using System.Text;
 using System.Threading.Tasks;
+using System.Diagnostics;
 
 namespace Master
 {
@@ -13,13 +14,16 @@ namespace Master
 
         static void Main(string[] args)
         {
+            Process.GetCurrentProcess().ProcessorAffinity = (IntPtr)(1 << 0);
+
             if (args.Length < 2)
             {
                 Console.WriteLine("Iveskite pipe pavadinimus:");
                 Console.Write("AgentA pipe: ");
-                string pipeA = Console.ReadLine();
+                string pipeA = Console.ReadLine() ?? "";
                 Console.Write("AgentB pipe: ");
-                string pipeB = Console.ReadLine();
+                string pipeB = Console.ReadLine() ?? "";
+
                 args = new string[] { pipeA, pipeB };
             }
 

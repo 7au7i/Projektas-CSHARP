@@ -6,6 +6,7 @@ using System.IO.Pipes;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
+using System.Diagnostics;
 
 namespace AgentA
 {
@@ -15,16 +16,18 @@ namespace AgentA
 
         static void Main(string[] args)
         {
+            Process.GetCurrentProcess().ProcessorAffinity = (IntPtr)(1 << 1);
+
             string katalogoKelias;
             string pipePavadinimas;
 
             if (args.Length < 2)
             {
                 Console.WriteLine("Iveskite katalogo kelia:");
-                katalogoKelias = Console.ReadLine();
+                katalogoKelias = Console.ReadLine() ?? "";
 
                 Console.WriteLine("Iveskite pipe pavadinima:");
-                pipePavadinimas = Console.ReadLine();
+                pipePavadinimas = Console.ReadLine() ?? "";
             }
             else
             {

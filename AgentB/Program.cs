@@ -1,73 +1,112 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Pipes;
+using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
+using System.Diagnostics;
 
 namespace AgentB
 {
     class Program
     {
+        static BlockingCollection<string> eile = new BlockingCollection<string>();
+
         static void Main(string[] args)
         {
-            string directoryPath;
+            Process.GetCurrentProcess().ProcessorAffinity = (IntPtr)(1 << 2);
 
-            if (args.Length == 0)
+            string katalogoKelias;
+            string pipePavadinimas;
+
+            if (args.Length < 2)
             {
-                Console.WriteLine("Nenurodytas katalogo kelias. Iveskite pilna kelia:");
-                directoryPath = Console.ReadLine();
+                Console.WriteLine("Iveskite katalogo kelia:");
+                katalogoKelias = Console.ReadLine() ?? "";
+
+                Console.WriteLine("Iveskite pipe pavadinima:");
+                pipePavadinimas = Console.ReadLine() ?? "";
             }
             else
             {
-                directoryPath = args[0];
+                katalogoKelias = args[0];
+                pipePavadinimas = args[1];
             }
 
-            directoryPath = directoryPath.Trim('"');
+            katalogoKelias = katalogoKelias.Trim('"');
 
-            if (!Directory.Exists(directoryPath))
+            if (!Directory.Exists(katalogoKelias))
             {
                 Console.WriteLine("Nurodytas katalogas neegzistuoja.");
                 return;
             }
 
-            string[] files = Directory.GetFiles(directoryPath, "*.txt");
+            Thread skaitytojoGija = new Thread(() => SkaitytiFailus(katalogoKelias));
+            Thread siuntejoGija = new Thread(() => SiustiDuomenis(pipePavadinimas));
 
-            if (files.Length == 0)
-            {
-                Console.WriteLine("Kataloge nerasta .txt failu.");
-                return;
-            }
+            skaitytojoGija.Start();
+            siuntejoGija.Start();
 
-            foreach (string file in files)
-            {
-                var wordCount = CountWordsInFile(file);
-                Console.WriteLine($"Rezultatai {Path.GetFileName(file)}:");
+            skaitytojoGija.Join();
+            eile.CompleteAdding();
+            siuntejoGija.Join();
 
-                foreach (var kvp in wordCount)
-                {
-                    Console.WriteLine($"{kvp.Key}: {kvp.Value}");
-                }
-            }
-
-            Console.WriteLine("Failu skanavimas baigtas.");
+            Console.WriteLine("AgentB darbas baigtas.");
         }
 
-        static Dictionary<string, int> CountWordsInFile(string filePath)
+        static void SkaitytiFailus(string katalogoKelias)
         {
-            var wordCount = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-            string content = File.ReadAllText(filePath);
-            var words = Regex.Matches(content, @"\b\w+\b");
+            string[] failai = Directory.GetFiles(katalogoKelias, "*.txt");
 
-            foreach (Match match in words)
+            foreach (string failas in failai)
             {
-                string word = match.Value;
+                var zodziuSkaicius = SkaiciuotiZodzius(failas);
+                string failoPavadinimas = Path.GetFileName(failas);
 
-                if (wordCount.ContainsKey(word))
-                    wordCount[word]++;
+                foreach (var elementas in zodziuSkaicius)
+                {
+                    string eilute = $"{failoPavadinimas}:{elementas.Key}:{elementas.Value}";
+                    eile.Add(eilute);
+                }
+            }
+        }
+
+        static void SiustiDuomenis(string pipePavadinimas)
+        {
+            using (NamedPipeClientStream pipeClient = new NamedPipeClientStream(".", pipePavadinimas, PipeDirection.Out))
+            {
+                Console.WriteLine("Jungiamasi prie master...");
+                pipeClient.Connect();
+                Console.WriteLine("Prisijungta prie master.");
+
+                using (StreamWriter writer = new StreamWriter(pipeClient, Encoding.UTF8) { AutoFlush = true })
+                {
+                    foreach (var eilute in eile.GetConsumingEnumerable())
+                    {
+                        writer.WriteLine(eilute);
+                    }
+                }
+            }
+        }
+
+        static Dictionary<string, int> SkaiciuotiZodzius(string failoKelias)
+        {
+            var zodziuSkaicius = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            string turinys = File.ReadAllText(failoKelias);
+            var zodziai = Regex.Matches(turinys, @"\b\w+\b");
+
+            foreach (Match zodis in zodziai)
+            {
+                string tekstas = zodis.Value;
+                if (zodziuSkaicius.ContainsKey(tekstas))
+                    zodziuSkaicius[tekstas]++;
                 else
-                    wordCount[word] = 1;
+                    zodziuSkaicius[tekstas] = 1;
             }
 
-            return wordCount;
+            return zodziuSkaicius;
         }
     }
 }
